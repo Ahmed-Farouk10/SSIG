@@ -41,12 +41,48 @@ export class AlertManager {
         this.alertsContainer.appendChild(alertCard);
     }
 
-    acknowledgeAlert(button) {
+    getAlertDataFromCard(alertCard) {
+        // Helper function to extract alert data from the DOM card
+        const title = alertCard.querySelector('.alert-title').textContent;
+        const description = alertCard.querySelector('.alert-description').textContent.trim();
+        const priority = alertCard.querySelector('.alert-priority').textContent;
+        const type = alertCard.querySelector('.alert-priority').classList.contains('critical') ? 'critical' :
+                     alertCard.querySelector('.alert-priority').classList.contains('warning') ? 'warning' : 'info';
+        
+        // The MQTT alert `id` is not on the card, so we'll use the title for now
+        // A better approach would be to store the id in a data attribute on the card
+        const id = title + '-' + new Date().getTime(); // Create a semi-unique ID
+
+        return { id, type, title, description, priority };
+    }
+
+    async acknowledgeAlert(button) {
         const alertCard = button.closest('.alert-card');
         alertCard.style.opacity = '0.7';
         button.textContent = 'Acknowledged';
         button.disabled = true;
         button.style.background = 'rgba(100, 100, 100, 0.3)';
+
+        // --- Send data to backend for logging ---
+        const alertData = this.getAlertDataFromCard(alertCard);
+        
+        try {
+            const response = await fetch('http://127.0.0.1:5001/api/log-alert', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(alertData),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                console.log('Alert logged successfully:', result.message);
+            } else {
+                console.error('Failed to log alert:', result.message);
+            }
+        } catch (error) {
+            console.error('Error sending alert to backend:', error);
+        }
     }
 
     resolveAlert(button) {
