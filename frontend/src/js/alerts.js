@@ -67,7 +67,9 @@ export class AlertManager {
         const alertData = this.getAlertDataFromCard(alertCard);
         
         try {
-            const response = await fetch('http://127.0.0.1:5001/api/log-alert', {
+            // Use environment variable for the API URL, with a local fallback
+            const apiUrl = import.meta.env.VITE_BACKEND_API_URL || 'http://127.0.0.1:5001';
+            const response = await fetch(`${apiUrl}/api/log-alert`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
