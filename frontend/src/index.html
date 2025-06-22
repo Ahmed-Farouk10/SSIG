@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSIG - Smart Safety Inspection Guard</title>
+    <link rel="stylesheet" href="./css/styles.css">
+    <link rel="stylesheet" href="./css/animations.css">
+    <link rel="stylesheet" href="./css/components.css">
+</head>
+<body>
+    <!-- Intro Animation -->
+    <div class="intro-container" id="intro">
+        <div class="intro-content">
+            <div class="robot-icon">🤖</div>
+            <div class="intro-text">SSIG</div>
+            <div class="subtitle">Making it real</div>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div class="dashboard" id="dashboard">
+        <header class="header">
+            <div class="title-section">
+                <h1>Smart-Safety-Inspection-Guard-Robot</h1>
+                <div class="subtitle">SSIG</div>
+            </div>
+            <div class="controls">
+                <button class="theme-toggle" id="themeToggle">🌙</button>
+            </div>
+        </header>
+
+        <!-- System Status -->
+        <section class="status-section">
+            <div class="status-card connected" id="statusCard">
+                <div class="status-header">
+                    <div class="status-icon">📡</div>
+                    <div class="status-text">System Status</div>
+                    <div class="status-indicator connected" id="statusIndicator"></div>
+                </div>
+                <div class="status-text" id="statusText">Connected to SerBot</div>
+                <button id="toggleConnection" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">Toggle Connection</button>
+            </div>
+        </section>
+
+        <!-- Alerts Section -->
+        <section class="alerts-section">
+            <h2 class="section-title">🚨 Active Alerts</h2>
+            <div class="alerts-container" id="alertsContainer">
+                <!-- Alert cards will be dynamically inserted here -->
+            </div>
+            <div class="alert-summary">
+                <div class="summary-item critical">
+                    <span class="summary-count">0</span>
+                    <span class="summary-label">Critical</span>
+                </div>
+                <div class="summary-item warning">
+                    <span class="summary-count">0</span>
+                    <span class="summary-label">Warning</span>
+                </div>
+                <div class="summary-item info">
+                    <span class="summary-count">0</span>
+                    <span class="summary-label">Info</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sensors Section -->
+        <section>
+            <h2 class="section-title">🛡️ Sensors</h2>
+            <div class="sensors-grid" id="sensorsGrid">
+                <!-- Sensor cards will be dynamically inserted here -->
+            </div>
+        </section>
+    </div>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script type="module" src="./js/config.js"></script>
+    <script type="module" src="./js/animations.js"></script>
+    <script type="module" src="./js/alerts.js"></script>
+    <script type="module" src="./js/sensors.js"></script>
+    <script type="module" src="./js/main.js"></script>
+</body>
+</html> 

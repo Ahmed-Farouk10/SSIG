@@ -1,0 +1,22 @@
+{
+  "name": "ssig-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for SSIG - Smart Safety Inspection Guard",
+  "main": "index.html",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "safety",
+    "inspection",
+    "monitoring",
+    "dashboard"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}
