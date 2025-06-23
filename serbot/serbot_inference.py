@@ -60,13 +60,14 @@ def setup_mqtt():
 
 def send_alert_mqtt(client, person_box, missing_ppe):
     alert_payload = {
-        "timestamp": datetime.now().isoformat(),
+        "icon": "⚠️",
         "title": "CRITICAL: PPE Missing",
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "description": f"Person at {person_box} is missing: {', '.join(missing_ppe)}",
         "priority": "HIGH",
+        "type": "critical",
         "person_box": person_box,
-        "missing_ppe": missing_ppe,
-        "type": "ppe_alert"
+        "missing_ppe": missing_ppe
     }
     client.publish(TOPIC, json.dumps(alert_payload))
     print(f"[ALERT] Sent MQTT: {alert_payload}")
