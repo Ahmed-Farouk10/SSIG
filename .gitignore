@@ -43,4 +43,10 @@ Thumbs.db
 /serbot/env
 /serbot/.env
 /serbot/.env.*
-*.pyc 
+*.pyc
+
+# Ignore Python virtual environment
+venv/
+
+# YOLOv8 model weights
+yolov8x.pt 

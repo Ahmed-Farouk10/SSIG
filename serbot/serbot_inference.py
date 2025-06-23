@@ -1,121 +1,137 @@
 import cv2
-import json
+from ultralytics import YOLO
+import numpy as np
+from datetime import datetime
 import time
+import argparse
+import sys
+import paho.mqtt.client as mqtt
+import json
 import os
 from dotenv import load_dotenv
-import paho.mqtt.client as paho
-from paho import mqtt
-from ultralytics import YOLO
 
 # Load environment variables from .env file
-load_dotenv(dotenv_path='serbot/.env')
+load_dotenv()
 
-# --- Constants ---
-# MQTT Configuration
+# --- CONFIGURATION ---
+MODEL_PATH = 'yolov8x.pt'
+ALL_PPE_CLASSES = ['face-guard', 'ear-mufs', 'safety-vest', 'gloves', 'glasses']
+EXCLUDED_CLASSES = ['hands', 'head', 'face', 'ear', 'tools', 'foot', 'medical-suit', 'safety-suit', 'face-mask-medical']
+
+# MQTT config (set these as environment variables or hardcode for testing)
 BROKER = os.getenv("MQTT_BROKER")
-PORT = int(os.getenv("MQTT_PORT"))
+PORT = os.getenv("MQTT_PORT")
+TOPIC = os.getenv("MQTT_TOPIC", "alerts")
+CLIENT_ID = "serbot_inference"
 USERNAME = os.getenv("MQTT_USERNAME")
 PASSWORD = os.getenv("MQTT_PASSWORD")
-TOPIC = "alerts"
-CLIENT_ID = "serbot_yolo_client"
 
-# YOLO Configuration
-MODEL_PATH = 'serbot/yolov8s.pt'
-OBSTACLE_CLASSES = ['person']  # We are defining 'person' as a critical obstacle
-ALERT_COOLDOWN_SECONDS = 10  # Cooldown to prevent alert spam
+# Print MQTT config for debugging
+print("BROKER:", BROKER)
+print("PORT:", PORT)
+print("USERNAME:", USERNAME)
+print("PASSWORD:", PASSWORD)
 
-# --- MQTT Callbacks ---
-def on_connect(client, userdata, flags, rc, properties=None):
-    """Callback for when the client connects to the broker."""
-    if rc == 0:
-        print("SerBot connected successfully to HiveMQ Cloud!")
-    else:
-        print(f"SerBot failed to connect, return code {rc}\n")
+# Validate required variables
+missing_vars = []
+if not BROKER:
+    missing_vars.append('MQTT_BROKER')
+if not PORT:
+    missing_vars.append('MQTT_PORT')
+if not USERNAME:
+    missing_vars.append('MQTT_USERNAME')
+if not PASSWORD:
+    missing_vars.append('MQTT_PASSWORD')
+if missing_vars:
+    print(f"ERROR: Missing required environment variables: {', '.join(missing_vars)}")
+    print("Please set them in your .env file or environment before running the script.")
+    sys.exit(1)
 
-def on_publish(client, userdata, mid, properties=None):
-    """Callback for when a message is published."""
-    print(f"Published message with mid: {mid}")
+PORT = int(PORT)
 
-# --- Main Application ---
-def run_inference():
-    # --- Initialize MQTT Client ---
-    client = paho.Client(client_id=CLIENT_ID, protocol=paho.MQTTv5)
-    client.on_connect = on_connect
-    client.on_publish = on_publish
-    client.tls_set(tls_version=mqtt.client.ssl.PROTOCOL_TLS)
+def setup_mqtt():
+    # Use MQTTv5 for HiveMQ Cloud, enable TLS
+    client = mqtt.Client(client_id=CLIENT_ID, protocol=mqtt.MQTTv5)
+    client.tls_set()  # Enable TLS for secure connection
     client.username_pw_set(USERNAME, PASSWORD)
     client.connect(BROKER, PORT)
     client.loop_start()
+    return client
 
-    # --- Initialize YOLO Model ---
-    print(f"Loading YOLO model from {MODEL_PATH}...")
+def send_alert_mqtt(client, person_box, missing_ppe):
+    alert_payload = {
+        "timestamp": datetime.now().isoformat(),
+        "title": "CRITICAL: PPE Missing",
+        "description": f"Person at {person_box} is missing: {', '.join(missing_ppe)}",
+        "priority": "HIGH",
+        "person_box": person_box,
+        "missing_ppe": missing_ppe,
+        "type": "ppe_alert"
+    }
+    client.publish(TOPIC, json.dumps(alert_payload))
+    print(f"[ALERT] Sent MQTT: {alert_payload}")
+
+def main(conf_threshold=0.5, camera_index=0, required_ppe=None, interval=5):
+    print("Loading model...")
     model = YOLO(MODEL_PATH)
-    print("YOLO model loaded.")
+    class_names = model.names
 
-    # --- Initialize Video Capture ---
-    # Using webcam 0. Change to a video file path if needed.
-    cap = cv2.VideoCapture(0)
+    person_class_idx = [k for k, v in class_names.items() if v == 'person'][0]
+    ppe_class_indices = [k for k, v in class_names.items() if v in ALL_PPE_CLASSES]
+    excluded_class_indices = [k for k, v in class_names.items() if v in EXCLUDED_CLASSES]
+
+    if required_ppe is None:
+        required_ppe = ALL_PPE_CLASSES
+
+    cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
-        print("Error: Could not open video stream or file.")
-        return
+        print("Could not open webcam.")
+        sys.exit(1)
 
-    last_alert_time = 0
-    print("Starting inference loop... (Press 'q' to quit)")
+    mqtt_client = setup_mqtt()
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        # --- Run YOLO Inference ---
-        results = model(frame)
-
-        obstacle_detected = False
-        for r in results:
-            for box in r.boxes:
-                cls_id = int(box.cls[0])
-                class_name = model.names[cls_id]
-
-                if class_name in OBSTACLE_CLASSES:
-                    obstacle_detected = True
-                    # Draw a bounding box for visualization
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    cv2.putText(frame, f"OBSTACLE: {class_name}", (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-                    break  # Found an obstacle, no need to check further in this frame
-            if obstacle_detected:
+    print("Starting inference. Press Ctrl+C to stop.")
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Failed to capture frame.")
                 break
 
-        # --- Send Alert if Obstacle Detected ---
-        if obstacle_detected:
-            current_time = time.time()
-            if (current_time - last_alert_time) > ALERT_COOLDOWN_SECONDS:
-                print(f"Obstacle detected: '{OBSTACLE_CLASSES[0]}'. Sending alert!")
-                alert_payload = {
-                    "id": f"obs_{int(current_time)}",
-                    "type": "critical",
-                    "icon": "⚠️",
-                    "title": "CRITICAL: Obstacle Detected",
-                    "time": "Just now",
-                    "description": f"An obstacle ({OBSTACLE_CLASSES[0]}) was detected in the robot's path. Avoidance maneuver initiated.",
-                    "priority": "HIGH"
-                }
-                client.publish(TOPIC, payload=json.dumps(alert_payload), qos=1)
-                last_alert_time = current_time
+            results = model(frame, conf=conf_threshold, verbose=False)[0]
+            detections = [{'class': int(b.cls[0]), 'xyxy': b.xyxy[0].cpu().numpy().astype(int)} for b in results.boxes]
+            persons = [d for d in detections if d['class'] == person_class_idx]
+            ppe_items = [d for d in detections if d['class'] in ppe_class_indices]
 
-        # --- Display the Frame ---
-        cv2.imshow('SerBot Obstacle Detection', frame)
+            for person in persons:
+                px1, py1, px2, py2 = person['xyxy']
+                ppe_found = set()
+                for d in ppe_items:
+                    x1, y1, x2, y2 = d['xyxy']
+                    cx = (x1 + x2) // 2
+                    cy = (y1 + y2) // 2
+                    if px1 <= cx <= px2 and py1 <= cy <= py2:
+                        ppe_found.add(class_names[d['class']])
+                missing_ppe = [ppe for ppe in required_ppe if ppe not in ppe_found]
+                if missing_ppe:
+                    send_alert_mqtt(mqtt_client, f"[{px1},{py1},{px2},{py2}]", missing_ppe)
+                else:
+                    print(f"[{datetime.now()}] Person at [{px1},{py1},{px2},{py2}] - All PPE present.")
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            time.sleep(interval)  # Wait before next detection
 
-    # --- Cleanup ---
-    cap.release()
-    cv2.destroyAllWindows()
-    client.loop_stop()
-    client.disconnect()
-    print("Script finished.")
+    except KeyboardInterrupt:
+        print("Stopping inference.")
+    finally:
+        cap.release()
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
 
 if __name__ == "__main__":
-    run_inference()
+    parser = argparse.ArgumentParser(description="PPE Detection CLI")
+    parser.add_argument('--conf', type=float, default=0.5, help='Confidence threshold')
+    parser.add_argument('--camera', type=int, default=0, help='Camera index')
+    parser.add_argument('--ppe', nargs='*', default=ALL_PPE_CLASSES, help='Required PPE items')
+    parser.add_argument('--interval', type=int, default=5, help='Detection interval in seconds')
+    args = parser.parse_args()
+    main(conf_threshold=args.conf, camera_index=args.camera, required_ppe=args.ppe, interval=args.interval)
