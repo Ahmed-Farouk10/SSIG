@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- CONFIGURATION ---
-MODEL_PATH = 'yolov8x.pt'
+MODEL_PATHS = ['yolo8s.pt', 'yolo8n.pt', 'yolov8x.pt']
 ALL_PPE_CLASSES = ['face-guard', 'ear-mufs', 'safety-vest', 'gloves', 'glasses']
 EXCLUDED_CLASSES = ['hands', 'head', 'face', 'ear', 'tools', 'foot', 'medical-suit', 'safety-suit', 'face-mask-medical']
 
@@ -73,13 +73,14 @@ def send_alert_mqtt(client, person_box, missing_ppe):
     print(f"[ALERT] Sent MQTT: {alert_payload}")
 
 def main(conf_threshold=0.5, camera_index=0, required_ppe=None, interval=5):
-    print("Loading model...")
-    model = YOLO(MODEL_PATH)
-    class_names = model.names
-
-    person_class_idx = [k for k, v in class_names.items() if v == 'person'][0]
-    ppe_class_indices = [k for k, v in class_names.items() if v in ALL_PPE_CLASSES]
-    excluded_class_indices = [k for k, v in class_names.items() if v in EXCLUDED_CLASSES]
+    print("Loading models...")
+    try:
+        models = [YOLO(path) for path in MODEL_PATHS]
+        print(f"Successfully loaded {len(models)} models.")
+    except Exception as e:
+        print(f"Error loading models: {e}")
+        print(f"Please ensure all model files in {MODEL_PATHS} are present in the directory.")
+        sys.exit(1)
 
     if required_ppe is None:
         required_ppe = ALL_PPE_CLASSES
@@ -99,20 +100,54 @@ def main(conf_threshold=0.5, camera_index=0, required_ppe=None, interval=5):
                 print("Failed to capture frame.")
                 break
 
-            results = model(frame, conf=conf_threshold, verbose=False)[0]
-            detections = [{'class': int(b.cls[0]), 'xyxy': b.xyxy[0].cpu().numpy().astype(int)} for b in results.boxes]
-            persons = [d for d in detections if d['class'] == person_class_idx]
-            ppe_items = [d for d in detections if d['class'] in ppe_class_indices]
+            all_person_boxes = []
+            all_person_scores = []
+            all_ppe_detections = []
 
-            for person in persons:
-                px1, py1, px2, py2 = person['xyxy']
+            for model in models:
+                results = model(frame, conf=conf_threshold, verbose=False)[0]
+                model_class_names = model.names
+                
+                person_class_indices = [k for k, v in model_class_names.items() if v == 'person']
+                if not person_class_indices:
+                    continue
+                person_class_idx = person_class_indices[0]
+                
+                ppe_class_indices = [k for k, v in model_class_names.items() if v in ALL_PPE_CLASSES]
+
+                for r in results.boxes:
+                    class_id = int(r.cls[0])
+                    box = r.xyxy[0].cpu().numpy()
+                    
+                    if class_id == person_class_idx:
+                        all_person_boxes.append(list(box.astype(int)))
+                        all_person_scores.append(float(r.conf[0]))
+                    elif class_id in ppe_class_indices:
+                        all_ppe_detections.append({
+                            'class_name': model_class_names[class_id],
+                            'xyxy': box.astype(int)
+                        })
+
+            # Use Non-Maximum Suppression (NMS) to merge overlapping person boxes
+            person_boxes_xywh = [[x1, y1, x2 - x1, y2 - y1] for x1, y1, x2, y2 in all_person_boxes]
+            unique_person_indices = []
+            if all_person_boxes:
+                unique_person_indices = cv2.dnn.NMSBoxes(person_boxes_xywh, all_person_scores, conf_threshold, 0.45)
+                if isinstance(unique_person_indices, np.ndarray):
+                    unique_person_indices = unique_person_indices.flatten()
+            
+            final_person_boxes = [all_person_boxes[i] for i in unique_person_indices]
+
+            for person_box in final_person_boxes:
+                px1, py1, px2, py2 = person_box
                 ppe_found = set()
-                for d in ppe_items:
+                for d in all_ppe_detections:
                     x1, y1, x2, y2 = d['xyxy']
                     cx = (x1 + x2) // 2
                     cy = (y1 + y2) // 2
                     if px1 <= cx <= px2 and py1 <= cy <= py2:
-                        ppe_found.add(class_names[d['class']])
+                        ppe_found.add(d['class_name'])
+                
                 missing_ppe = [ppe for ppe in required_ppe if ppe not in ppe_found]
                 if missing_ppe:
                     send_alert_mqtt(mqtt_client, f"[{px1},{py1},{px2},{py2}]", missing_ppe)

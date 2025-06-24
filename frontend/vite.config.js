@@ -4,7 +4,10 @@ export default defineConfig({
   root: 'src',
   server: {
     port: 3000,
-    open: true
+    open: true,
+    proxy: {
+      '/api': 'http://localhost:5001'
+    }
   },
   build: {
     outDir: '../dist',

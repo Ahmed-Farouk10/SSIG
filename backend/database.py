@@ -16,11 +16,10 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS alerts (
                 id TEXT PRIMARY KEY,
-                type TEXT NOT NULL,
-                title TEXT NOT NULL,
+                type TEXT,
+                title TEXT,
                 description TEXT,
-                priority TEXT,
-                acknowledged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                priority TEXT
             )
         ''')
 

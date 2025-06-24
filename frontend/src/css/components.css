@@ -305,4 +305,40 @@
     font-weight: bold;
     color: #00ff88;
     margin-top: 0.5rem;
+}
+
+.upload-btn {
+    background: #222;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.7em 1.5em;
+    font-size: 1.1em;
+    font-weight: 500;
+    margin: 1em 0 1.5em 0;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+/* Light mode support */
+.light-mode .upload-btn {
+    background: #fff;
+    color: #222;
+    border: 1px solid #ccc;
+}
+
+.upload-btn:hover, .upload-btn:focus {
+    background: #ff3c3c;
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(255,60,60,0.15);
+    outline: none;
+}
+.light-mode .upload-btn:hover, .light-mode .upload-btn:focus {
+    background: #ffeaea;
+    color: #ff3c3c;
+    border: 1px solid #ff3c3c;
 } 

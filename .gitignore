@@ -50,3 +50,5 @@ venv/
 
 # YOLOv8 model weights
 yolov8x.pt 
+yolo8n.pt
+yolo8s.pt

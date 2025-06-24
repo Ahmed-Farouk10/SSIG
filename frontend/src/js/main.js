@@ -115,4 +115,52 @@ client.on('message', function (topic, message) {
   } catch (e) {
     console.error('Failed to parse MQTT alert message:', e);
   }
-}); 
+});
+
+// PPE Image Upload Logic
+const uploadBtn = document.getElementById('uploadPPEBtn');
+const fileInput = document.getElementById('ppeImageInput');
+const modal = document.getElementById('ppeResultModal');
+const closeModal = document.getElementById('closePPEModal');
+const resultImage = document.getElementById('ppeResultImage');
+const resultDetails = document.getElementById('ppeResultDetails');
+
+if (uploadBtn && fileInput && modal && closeModal && resultImage && resultDetails) {
+  uploadBtn.onclick = () => fileInput.click();
+
+  fileInput.onchange = async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image', file);
+    // Show loading...
+    resultImage.innerHTML = 'Processing...';
+    resultDetails.innerHTML = '';
+    modal.style.display = 'block';
+    // Send to backend (use correct backend URL)
+    try {
+      const res = await fetch('http://localhost:5001/api/check-ppe-image', { method: 'POST', body: formData });
+      const data = await res.json();
+      // Display result
+      if (data.annotated_image) {
+        resultImage.innerHTML = `<img src="data:image/png;base64,${data.annotated_image}" style="max-width:100%;">`;
+      } else {
+        resultImage.innerHTML = '';
+      }
+      if (data.detections && data.detections.length > 0) {
+        resultDetails.innerHTML = data.detections.map(
+          d => `<div class="alert-card critical">
+                  <div class="alert-title">Person at ${d.person_box}</div>
+                  <div class="alert-description">Missing PPE: ${d.missing_ppe ? d.missing_ppe.join(', ') : 'None'}</div>
+                </div>`
+        ).join('');
+      } else {
+        resultDetails.innerHTML = '<div class="alert-card info">No persons detected or all PPE present.</div>';
+      }
+    } catch (e) {
+      resultImage.innerHTML = '';
+      resultDetails.innerHTML = '<div class="alert-card warning">Error processing image.</div>';
+    }
+  };
+  closeModal.onclick = () => { modal.style.display = 'none'; };
+} 

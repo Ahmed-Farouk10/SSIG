@@ -43,6 +43,20 @@
             </div>
         </section>
 
+        <!-- Upload PPE Image Button and Modal -->
+        <button id="uploadPPEBtn" class="upload-btn">
+          <span class="icon">📤</span> Upload Image for PPE Check
+        </button>
+        <input type="file" id="ppeImageInput" accept="image/*" style="display:none;">
+        <div id="ppeResultModal" class="modal" style="display:none;">
+          <div class="modal-content">
+            <span class="close-modal" id="closePPEModal">&times;</span>
+            <h2>PPE Check Result</h2>
+            <div id="ppeResultImage"></div>
+            <div id="ppeResultDetails"></div>
+          </div>
+        </div>
+
         <!-- Alerts Section -->
         <section class="alerts-section">
             <h2 class="section-title">🚨 Active Alerts</h2>
